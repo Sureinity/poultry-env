@@ -1,0 +1,13 @@
+[project]
+name = "poultry-env"
+version = "0.1.0"
+description = "A poultry monitoring system using Raspberry Pi"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "adafruit-circuitpython-dht>=4.0.10",
+    "gpiozero>=2.0.1",
+    "rpi-gpio>=0.7.1",
+    "textual>=6.4.0",
+    "mh_z19>=3.1.7",
+]

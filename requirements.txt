@@ -1,0 +1,5 @@
+adafruit-circuitpython-dht
+RPi.GPIO
+gpiozero
+textual
+mh_z19
