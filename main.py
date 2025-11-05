@@ -6,7 +6,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Header, Footer, Static
 
-from hardware_manager import get_environmental_data, get_co2_data, MotionSensor
+from hardware_manager import get_environmental_data, get_co2_data, MotionSensor, SoundDisturbanceDetector
 
 class PoultryApp(App):
     """A Textual dashboard for Poultry Monitoring System."""
@@ -33,11 +33,14 @@ class PoultryApp(App):
                 yield Static("[bold]FLOCK ACTIVITY[/bold]", classes="panel-title")
                 yield Static("Motion Status: --", id="motion-status-display")
                 yield Static("Last Motion:   --", id="last-motion-display")
+                yield Static("Sound Status:  --", id="sound-status-display")
         
         yield Footer(id="footer")
+
     def on_mount(self) -> None:
         """Called when the app is first mounted. We start our update timer here."""
         self.motion_tracker = MotionSensor(inactivity_threshold_sec=7200)
+        self.sound_detector = SoundDisturbanceDetector()
 
         # Set an interval to call the 'update_data' method every 3 seconds
         self.set_interval(3, self.update_data)
@@ -50,12 +53,14 @@ class PoultryApp(App):
         
         # DHT22 Sensor data
         env_data = get_environmental_data()
-        temp = env_data['temperature']
-        humidity = env_data['humidity']
 
         # PIR Motion Sensor data
         self.motion_tracker.update()
         motion_data = self.motion_tracker.get_status()
+
+        # Sound Detector data
+        sound_data = self.sound_detector()
+        self.sound_detector().update()
 
         # Update the environmental UI panel
         temp_widget = self.query_one("#temperature-display", Static)
@@ -81,10 +86,13 @@ class PoultryApp(App):
         # Update the activity panel
         motion_status_widget = self.query_one("#motion-status-display", Static)
         last_motion_widget = self.query_one("#last-motion-display", Static)
+        sound_status_widget = self.query_one("#sound-status-display", Static)
 
         motion_status_text = "[bold green]ACTIVE[bold green]" if motion_data['motion_now'] else "[bold red]INACTIVE[red]"
         motion_status_widget.update(f"Motion Status: {motion_status_text}")
         last_motion_widget.update(f"Last Motion:   {motion_data['last_seen_str']}")
+        sound_status_text = "[bold yellow]NOISE DETECTED[bold yellow]" if sound_data['sound_now'] else "[dim]Quiet[/dim]"
+        sound_status_widget.update(f"Sound Status:  {sound_status_text}")
         
         # Overall System Status
         status_panel = self.query_one("#status-panel", Static)
@@ -96,7 +104,9 @@ class PoultryApp(App):
             system_status = "CRITICAL"
         elif motion_data['inactivity_alert']:
             system_status = "CRITICAL"
-        elif co2_data is not None and co2_data > 2000: # Using real CO2 data
+        elif sound_data["acoustic_alert"]:
+            system_status = "WARNING"
+        elif co2_data is not None and co2_data > 2000:
             system_status = "WARNING"
 
         status_panel.update(system_status)

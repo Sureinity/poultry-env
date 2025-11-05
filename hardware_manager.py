@@ -1,7 +1,7 @@
 import adafruit_dht
 import board
 import time
-from gpiozero import MotionSensor
+from gpiozero import MotionSensor, InputDevice
 import mh_z19
 from time import time
 
@@ -23,6 +23,14 @@ except Exception as e:
     pir_sensor = None
     print(f"!!! ERROR: Could not initialize PIR sensor. Is it connected? Error: {e}")
     print("!!! INFO: The program will continue with simulated data for Motion.")
+
+# Initialize KY-037 Soun Sensor on GPIO 27
+try:
+    sound_sensor = InputDevice(27)
+    print("Sound Sensor KY-037 Initialized Successfully.")
+except Exception as e:
+    sound_sensor = None
+    print(f"!!! ERROR: Could not initialize Sound Sensor. Is it connected? Error: {e}")
 
 # Sensor Functions and Classes
 
@@ -109,10 +117,67 @@ class MotionTracker:
             "hyperactivity_alert": False # Placeholder for now
         }
 
+class SoundDisturbanceDetector:
+    """
+    A stateful class to analyze the digital output of a KY-037 sound sensor.
+    Implements a heuristic algorithm to filter brief noises and detect sustained disturbances.
+    """
+    def __init__(self, sustained_noise_sec: int = 8, quiet_reset_sec: int = 3):
+        self.sustained_noise_duration = sustained_noise_sec
+        self.quiet_reset_duration = quiet_reset_sec
+        
+        self.noise_start_time = None
+        self.quiet_start_time = time()
+        self.alert_triggered_for_event = False
+        self.sound_is_active = False
+
+    def update(self):
+        """Reads the sensor and updates the internal state. Should be called every loop."""
+        if sound_sensor is None:
+            self.sound_is_active = False
+            return
+            
+        self.sound_is_active = sound_sensor.is_active
+
+        if self.sound_is_active:
+            # Noise is detected
+            self.quiet_start_time = None # It's not quiet, so reset the quiet timer
+            if self.noise_start_time is None:
+                # This is the beginning of a new noise event
+                self.noise_start_time = time()
+        else:
+            # It is quiet
+            self.noise_start_time = None # It's not noisy, so reset the noise timer
+            if self.quiet_start_time is None:
+                # This is the beginning of a new quiet period
+                self.quiet_start_time = time()
+
+            # If it's been quiet for long enough, reset the alert flag
+            if time() - self.quiet_start_time > self.quiet_reset_duration:
+                self.alert_triggered_for_event = False
+
+    def get_status(self) -> dict:
+        """Applies the heuristic and returns the current status."""
+        alert_now = False
+        
+        # Check for a sustained noise event
+        if self.noise_start_time is not None:
+            noise_duration = time() - self.noise_start_time
+            if noise_duration > self.sustained_noise_duration and not self.alert_triggered_for_event:
+                alert_now = True
+                self.alert_triggered_for_event = True # Latch the alert until it gets quiet
+
+        return {
+            "sound_now": self.sound_is_active,
+            "acoustic_alert": alert_now,
+        }
+
+
 # Standalone Test Block
 if __name__ == "__main__":
     print("\n--- Testing Hardware Manager ---")
     motion_tracker = MotionTracker(inactivity_threshold_sec=30) # Short threshold for testing
+    sound_detector = SoundDisturbanceDetector(sustained_noise_sec=5, quiet_reset_sec=2) # Short threshold for testing
     
     while True:
         # Test Temp/Humidity
@@ -136,4 +201,10 @@ if __name__ == "__main__":
               f"Last Seen: {motion_status['last_seen_str']} | "
               f"Inactivity Alert: {motion_status['inactivity_alert']}")
         
-        time.sleep(2)
+        # Test Sound
+        sound_detector.update()
+        sound_status = sound_detector.get_status()
+        print(f"Sound Now: {sound_status['sound_now']} | "
+              f"Acoustic Alert: {sound_status['acoustic_alert']}")
+        
+        time.sleep(1)
