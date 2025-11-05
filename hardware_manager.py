@@ -2,6 +2,7 @@ import adafruit_dht
 import board
 import time
 from gpiozero import MotionSensor
+import mh_z19
 from time import time
 
 # Sensor Initialization
@@ -47,6 +48,24 @@ def get_environmental_data() -> dict:
     except Exception as error:
         print(f"An unexpected error occurred with the DHT22 sensor: {error}")
         return {'temperature': None, 'humidity': None}
+
+def get_co2_data() -> int | None:
+    """
+    Reads CO2 concentration from the MH-Z19C sensor.
+
+    Returns:
+        int: The CO2 PPM value on success.
+        None: On a failed read.
+    """
+    try:
+        co2_data = mh_z19.read()
+        if co2_data:
+            return co2_data.get('co2')
+        else:
+            return None
+    except Exception as e:
+        print(f"An unexpected error occurred with the MH-Z19C sensor: {e}")
+        return None
 
 class MotionTracker:
     """
@@ -102,6 +121,13 @@ if __name__ == "__main__":
             print(f"Temp/Humidity: {env_data['temperature']:.1f}°C, {env_data['humidity']:.1f}%  |  ", end="")
         else:
             print("Temp/Humidity: FAILED  |  ", end="")
+        
+        # Test CO2
+        co2_value = get_co2_data()
+        if co2_value is not None:
+            print(f"CO2: {co2_value} ppm | ", end="")
+        else:
+            print("CO2: FAILED |", end="")
 
         # Test Motion
         motion_tracker.update()

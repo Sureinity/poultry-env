@@ -1,7 +1,7 @@
 [project]
 name = "poultry-env"
 version = "0.1.0"
-description = "A poultry monitoring system using Raspberry Pi"
+description = "Poultry monitoring system using Raspberry Pi for real-time tracking of temperature, humidity, and CO₂ levels."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
